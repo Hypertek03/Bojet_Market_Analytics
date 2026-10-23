@@ -1,2 +1,3 @@
 Symbol,Signal_Date,Outcome_Date,Signal,Up_Probability,Down_Probability,Confidence,Actual,Correct
-AAPL,2026-10-21,,DOWN,45.97,54.03,54.03,,
+AAPL,2026-10-21,2026-10-22,DOWN,45.97,54.03,54.03,1.0,0.0
+AAPL,2026-10-22,,UP,50.72,49.28,50.72,,

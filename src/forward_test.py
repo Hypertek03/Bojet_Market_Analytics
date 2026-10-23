@@ -105,13 +105,13 @@ def load_prediction_log():
         if column not in log.columns:
             log[column] = np.nan
 
-    log = log[columns].copy()
+        log = log[columns].copy()
 
     for column in ["Signal_Date", "Outcome_Date"]:
         log[column] = (
             log[column]
+            .astype("string")
             .fillna("")
-            .astype(str)
             .str.strip()
         )
 

@@ -3,6 +3,8 @@ import yfinance as yf
 import plotly.graph_objects as go
 import pandas as pd
 
+from streamlit_local_storage import LocalStorage
+
 from src.indicators import calculate_indicators
 
 from src.ai_model import (
@@ -40,214 +42,283 @@ st.set_page_config(
 # CUSTOM CSS
 # ============================================================
 
-st.html("""
-<style>
+# ============================================================
+# CUSTOM CSS — THEME AWARE
+# ============================================================
 
-.stApp {
+THEMES = {
+    "Navy Blue": {
+        "background": "#020617",
+        "surface": "#0f172a",
+        "surface_alt": "#1e293b",
+        "text": "#f8fafc",
+        "muted": "#94a3b8",
+        "accent": "#3b82f6",
+        "border": "rgba(148, 163, 184, 0.20)",
+    },
+    "Midnight Dark": {
+        "background": "#09090b",
+        "surface": "#18181b",
+        "surface_alt": "#27272a",
+        "text": "#fafafa",
+        "muted": "#a1a1aa",
+        "accent": "#a1a1aa",
+        "border": "rgba(161, 161, 170, 0.25)",
+    },
+    "Emerald": {
+        "background": "#022c22",
+        "surface": "#064e3b",
+        "surface_alt": "#065f46",
+        "text": "#ecfdf5",
+        "muted": "#a7f3d0",
+        "accent": "#34d399",
+        "border": "rgba(52, 211, 153, 0.30)",
+    },
+    "Purple": {
+        "background": "#1e1038",
+        "surface": "#2e1065",
+        "surface_alt": "#4c1d95",
+        "text": "#faf5ff",
+        "muted": "#d8b4fe",
+        "accent": "#c084fc",
+        "border": "rgba(192, 132, 252, 0.30)",
+    },
+    "Light": {
+        "background": "#f1f5f9",
+        "surface": "#ffffff",
+        "surface_alt": "#e2e8f0",
+        "text": "#0f172a",
+        "muted": "#475569",
+        "accent": "#2563eb",
+        "border": "rgba(71, 85, 105, 0.25)",
+    },
+    "Sunset": {
+        "background": "#21110b",
+        "surface": "#3b1d14",
+        "surface_alt": "#572719",
+        "text": "#fff7ed",
+        "muted": "#fed7aa",
+        "accent": "#fb923c",
+        "border": "rgba(251, 146, 60, 0.30)",
+    },
+}
+
+# ============================================================
+# PERSISTENT DASHBOARD THEME
+# ============================================================
+
+THEME_STORAGE_KEY = "bojet_dashboard_theme"
+
+local_storage = LocalStorage(key="bojet_theme_storage")
+
+# Retrieve the saved theme once when the dashboard session starts.
+if "bojet_theme_loaded" not in st.session_state:
+    saved_theme = local_storage.getItem(THEME_STORAGE_KEY)
+
+    if saved_theme not in THEMES:
+        saved_theme = "Navy Blue"
+
+    st.session_state["dashboard_theme"] = saved_theme
+    st.session_state["bojet_theme_loaded"] = True
+
+# Display the theme selector.
+selected_theme = st.sidebar.selectbox(
+    "🎨 Dashboard Theme",
+    list(THEMES.keys()),
+    key="dashboard_theme",
+)
+
+# Save the selected theme in browser local storage.
+if st.session_state.get("bojet_last_saved_theme") != selected_theme:
+    local_storage.setItem(
+        itemKey=THEME_STORAGE_KEY,
+        itemValue=selected_theme,
+        key="save_bojet_theme",
+    )
+    st.session_state["bojet_last_saved_theme"] = selected_theme
+
+theme = THEMES[selected_theme]
+
+st.html(f"""
+<style>
+:root {{
+    --bg: {theme["background"]};
+    --surface: {theme["surface"]};
+    --surface-alt: {theme["surface_alt"]};
+    --text: {theme["text"]};
+    --muted: {theme["muted"]};
+    --accent: {theme["accent"]};
+    --border: {theme["border"]};
+}}
+
+.stApp {{
     background:
         radial-gradient(
             circle at top right,
-            rgba(37, 99, 235, 0.08),
+            color-mix(in srgb, var(--accent) 12%, transparent),
             transparent 35%
         ),
-        #020617;
-    color: #f8fafc;
-}
+        var(--bg);
+    color: var(--text);
+}}
 
-.block-container {
+[data-testid="stHeader"] {{
+    background: transparent;
+}}
+
+.block-container {{
     padding-top: 2rem;
     padding-bottom: 3rem;
     max-width: 1400px;
-}
+}}
 
-.main-title {
+.main-title {{
     font-size: 42px;
     font-weight: 800;
     letter-spacing: -1px;
     margin-bottom: 5px;
-    color: #f8fafc;
-}
+    color: var(--text);
+}}
 
-.main-subtitle {
-    color: #94a3b8;
+.main-subtitle {{
+    color: var(--muted);
     font-size: 16px;
     margin-bottom: 30px;
-}
+}}
 
-.section-title {
+.section-title {{
     font-size: 25px;
     font-weight: 700;
-    color: #f8fafc;
+    color: var(--text);
     margin-top: 30px;
     margin-bottom: 18px;
-}
+}}
 
-.metric-card {
-    background: linear-gradient(
-        145deg,
-        rgba(15, 23, 42, 0.98),
-        rgba(30, 41, 59, 0.92)
-    );
-
-    border: 1px solid rgba(148, 163, 184, 0.15);
+.metric-card,
+.prob-card {{
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 16px;
     padding: 20px;
+}}
+
+.metric-card {{
     min-height: 135px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}}
 
-    box-shadow:
-        0 10px 30px rgba(0, 0, 0, 0.18);
-}
-
-.metric-label {
-    color: #94a3b8;
+.metric-label,
+.ai-title,
+.decision-label {{
+    color: var(--muted);
     font-size: 14px;
     font-weight: 600;
-    margin-bottom: 8px;
-}
+}}
 
-.metric-value {
-    color: #f8fafc;
-    font-size: 28px;
+.metric-value,
+.prob-value,
+.decision-score {{
+    color: var(--text);
     font-weight: 800;
-}
+}}
 
-.metric-sub {
-    color: #64748b;
+.metric-value,
+.prob-value {{
+    font-size: 28px;
+}}
+
+.metric-sub,
+.footer {{
+    color: var(--muted);
     font-size: 13px;
-    margin-top: 5px;
-}
+}}
 
-.ai-card {
-    background:
-        linear-gradient(
-            135deg,
-            rgba(30, 41, 59, 0.98),
-            rgba(15, 23, 42, 0.98)
-        );
-
-    border: 1px solid rgba(59, 130, 246, 0.35);
+.ai-card,
+.decision-card {{
+    background: linear-gradient(
+        135deg,
+        var(--surface-alt),
+        var(--surface)
+    );
+    border: 1px solid var(--border);
     border-radius: 18px;
     padding: 25px;
     text-align: center;
+    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.20);
+}}
 
-    box-shadow:
-        0 10px 35px rgba(0, 0, 0, 0.25);
-}
-
-.ai-title {
-    color: #94a3b8;
-    font-size: 15px;
-    font-weight: 600;
-    margin-bottom: 10px;
-}
-
-.ai-signal {
+.ai-signal {{
     font-size: 42px;
     font-weight: 900;
     letter-spacing: 1px;
-}
+}}
 
-.ai-signal.bullish {
+.ai-signal.bullish,
+.decision-signal.bullish {{
     color: #22c55e;
-}
+}}
 
-.ai-signal.bearish {
+.ai-signal.bearish,
+.decision-signal.bearish {{
     color: #ef4444;
-}
+}}
 
-.ai-confidence {
-    color: #cbd5e1;
+.decision-signal.neutral {{
+    color: #f59e0b;
+}}
+
+.ai-confidence {{
+    color: var(--muted);
     margin-top: 8px;
-}
+}}
 
-.prob-card {
-    background: rgba(15, 23, 42, 0.95);
-    border: 1px solid rgba(148, 163, 184, 0.15);
-    border-radius: 14px;
-    padding: 18px;
+.prob-card {{
     text-align: center;
     margin-top: 15px;
-}
+}}
 
-.prob-title {
-    color: #94a3b8;
+.prob-title {{
+    color: var(--muted);
     font-size: 13px;
-}
+}}
 
-.prob-value {
-    color: #f8fafc;
-    font-size: 28px;
-    font-weight: 800;
-    margin-top: 5px;
-}
-
-.decision-card {
-    background:
-        linear-gradient(
-            135deg,
-            rgba(15, 23, 42, 0.98),
-            rgba(30, 41, 59, 0.95)
-        );
-
-    border: 1px solid rgba(148, 163, 184, 0.2);
-    border-radius: 18px;
-    padding: 28px;
-    text-align: center;
-
-    box-shadow:
-        0 10px 35px rgba(0, 0, 0, 0.25);
-}
-
-.decision-label {
-    color: #94a3b8;
-    font-size: 14px;
-    font-weight: 700;
+.decision-label {{
     letter-spacing: 1px;
-}
+}}
 
-.decision-score {
-    color: #f8fafc;
+.decision-score {{
     font-size: 50px;
-    font-weight: 900;
     margin: 5px 0;
-}
+}}
 
-.decision-signal {
+.decision-signal {{
     font-size: 25px;
     font-weight: 800;
-}
+}}
 
-.decision-signal.bullish {
-    color: #22c55e;
-}
-
-.decision-signal.bearish {
-    color: #ef4444;
-}
-
-.decision-signal.neutral {
-    color: #f59e0b;
-}
-
-.info-box {
-    background: rgba(15, 23, 42, 0.75);
-    border-left: 4px solid #3b82f6;
+.info-box {{
+    background: var(--surface);
+    border-left: 4px solid var(--accent);
     padding: 15px 18px;
     border-radius: 8px;
-    color: #cbd5e1;
+    color: var(--text);
     margin-bottom: 20px;
-}
+}}
 
-.footer {
+.stButton > button {{
+    border-color: var(--accent);
+}}
+
+.footer {{
     text-align: center;
-    color: #64748b;
     padding-top: 40px;
     padding-bottom: 20px;
-    font-size: 13px;
-}
+}}
 
 </style>
 """)
+
+
 
 
 # ============================================================
@@ -256,6 +327,7 @@ st.html("""
 
 st.html("""
 <div class="main-title">
+
     📊 Bojet Market Analytics
 </div>
 
@@ -271,6 +343,8 @@ st.html("""
 # ============================================================
 
 st.sidebar.title("⚙️ Market Settings")
+
+
 
 market_type = st.sidebar.selectbox(
     "Market Type",
@@ -626,10 +700,34 @@ st.html("""
 </div>
 """)
 
-
 fig = go.Figure()
 
+# Prepare volume data for hover information when available.
+has_volume = "Volume" in data.columns
 
+if has_volume:
+    volume_data = data[["Volume"]].to_numpy()
+    hover_template = (
+        "<b>Date:</b> %{x|%d %b %Y}<br>"
+        "<b>Open:</b> %{open:.4f}<br>"
+        "<b>High:</b> %{high:.4f}<br>"
+        "<b>Low:</b> %{low:.4f}<br>"
+        "<b>Close:</b> %{close:.4f}<br>"
+        "<b>Volume:</b> %{customdata[0]:,.0f}"
+        "<extra></extra>"
+    )
+else:
+    volume_data = None
+    hover_template = (
+        "<b>Date:</b> %{x|%d %b %Y}<br>"
+        "<b>Open:</b> %{open:.4f}<br>"
+        "<b>High:</b> %{high:.4f}<br>"
+        "<b>Low:</b> %{low:.4f}<br>"
+        "<b>Close:</b> %{close:.4f}"
+        "<extra></extra>"
+    )
+
+# Candlestick price chart.
 fig.add_trace(
     go.Candlestick(
         x=data.index,
@@ -637,39 +735,92 @@ fig.add_trace(
         high=data["High"],
         low=data["Low"],
         close=data["Close"],
-        name="Price"
+        customdata=volume_data,
+        hovertemplate=hover_template,
+        name="Price",
+        increasing_line_color="#22c55e",
+        decreasing_line_color="#ef4444",
     )
 )
 
-
+# 10-day moving average.
 fig.add_trace(
     go.Scatter(
         x=data.index,
         y=data["MA10"],
         mode="lines",
-        name="MA10"
+        name="MA10",
+        line=dict(
+            color=theme["accent"],
+            width=2,
+        ),
+        hovertemplate=(
+            "<b>Date:</b> %{x|%d %b %Y}<br>"
+            "<b>MA10:</b> %{y:.4f}"
+            "<extra></extra>"
+        ),
     )
 )
 
-
+# Apply the currently selected dashboard theme.
 fig.update_layout(
     height=550,
-    template="plotly_dark",
-    xaxis_rangeslider_visible=False,
     margin=dict(
         l=20,
         r=20,
-        t=30,
-        b=20
+        t=35,
+        b=20,
     ),
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)"
+    paper_bgcolor=theme["background"],
+    plot_bgcolor=theme["surface"],
+    font=dict(
+        color=theme["text"],
+        size=12,
+    ),
+    hovermode="x unified",
+    dragmode="pan",
+    xaxis=dict(
+        title="Date",
+        rangeslider=dict(visible=False),
+        showgrid=True,
+        gridcolor=theme["border"],
+        zeroline=False,
+        showspikes=True,
+        spikemode="across",
+        spikesnap="cursor",
+        showline=True,
+        linecolor=theme["border"],
+    ),
+    yaxis=dict(
+        title="Price",
+        side="right",
+        showgrid=True,
+        gridcolor=theme["border"],
+        zeroline=False,
+        showspikes=True,
+        spikesnap="cursor",
+        showline=True,
+        linecolor=theme["border"],
+    ),
+    legend=dict(
+        orientation="h",
+        yanchor="bottom",
+        y=1.02,
+        xanchor="left",
+        x=0,
+    ),
+    uirevision="market-chart",
 )
 
-
+# Display the chart with zoom and pan controls.
 st.plotly_chart(
     fig,
-    width="stretch"
+    width="stretch",
+    config={
+        "scrollZoom": True,
+        "displayModeBar": True,
+        "displaylogo": False,
+    },
 )
 
 
@@ -1357,30 +1508,73 @@ if backtest_summary is not None:
 
     portfolio_fig = go.Figure()
 
-
+    # Portfolio growth line.
     portfolio_fig.add_trace(
         go.Scatter(
             x=backtest_results.index,
             y=backtest_results["Portfolio"],
             mode="lines",
-            name="MA10 Strategy"
+            name="MA10 Strategy",
+            line=dict(
+                color=theme["accent"],
+                width=2.5,
+            ),
+            hovertemplate=(
+                "<b>Date:</b> %{x|%d %b %Y}<br>"
+                "<b>Portfolio Value:</b> $%{y:,.2f}"
+                "<extra></extra>"
+            ),
         )
     )
 
-
+    # Theme-aware chart layout.
     portfolio_fig.update_layout(
-        height=400,
-        template="plotly_dark",
-        yaxis_title="Portfolio Value",
-        xaxis_title="Date",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)"
+        height=420,
+        margin=dict(
+            l=20,
+            r=20,
+            t=35,
+            b=20,
+        ),
+        paper_bgcolor=theme["background"],
+        plot_bgcolor=theme["surface"],
+        font=dict(
+            color=theme["text"],
+            size=12,
+        ),
+        hovermode="x unified",
+        dragmode="pan",
+        xaxis=dict(
+            title="Date",
+            showgrid=True,
+            gridcolor=theme["border"],
+            zeroline=False,
+            showline=True,
+            linecolor=theme["border"],
+        ),
+        yaxis=dict(
+            title="Portfolio Value ($)",
+            tickprefix="$",
+            separatethousands=True,
+            showgrid=True,
+            gridcolor=theme["border"],
+            zeroline=False,
+            showline=True,
+            linecolor=theme["border"],
+        ),
+        showlegend=True,
+        uirevision="portfolio-growth-chart",
     )
 
-
+    # Enable zooming and other chart controls.
     st.plotly_chart(
         portfolio_fig,
-        width="stretch"
+        width="stretch",
+        config={
+            "scrollZoom": True,
+            "displayModeBar": True,
+            "displaylogo": False,
+        },
     )
 
 
@@ -1675,53 +1869,117 @@ try:
 
     strategy_fig = go.Figure()
 
-
+    # MA10 Strategy
     strategy_fig.add_trace(
         go.Scatter(
             x=ma_results_compare.index,
             y=ma_results_compare["Portfolio"],
             mode="lines",
-            name="MA10 Strategy"
+            name="MA10 Strategy",
+            line=dict(
+                color="#3b82f6",
+                width=2.5,
+            ),
+            hovertemplate=(
+                "<b>Date:</b> %{x|%d %b %Y}<br>"
+                "<b>MA10 Strategy:</b> $%{y:,.2f}"
+                "<extra></extra>"
+            ),
         )
     )
 
-
+    # Bojet AI Strategy
     strategy_fig.add_trace(
         go.Scatter(
             x=ai_results.index,
             y=ai_results["Portfolio"],
             mode="lines",
-            name="Bojet AI"
+            name="Bojet AI",
+            line=dict(
+                color="#22c55e",
+                width=2.5,
+            ),
+            hovertemplate=(
+                "<b>Date:</b> %{x|%d %b %Y}<br>"
+                "<b>Bojet AI:</b> $%{y:,.2f}"
+                "<extra></extra>"
+            ),
         )
     )
 
-
+    # Buy and Hold Strategy
     strategy_fig.add_trace(
         go.Scatter(
             x=buy_hold_results.index,
             y=buy_hold_results["Portfolio"],
             mode="lines",
-            name="Buy & Hold"
+            name="Buy & Hold",
+            line=dict(
+                color="#f59e0b",
+                width=2.5,
+            ),
+            hovertemplate=(
+                "<b>Date:</b> %{x|%d %b %Y}<br>"
+                "<b>Buy & Hold:</b> $%{y:,.2f}"
+                "<extra></extra>"
+            ),
         )
     )
 
-
+    # Theme-aware chart layout.
     strategy_fig.update_layout(
         height=500,
-        template="plotly_dark",
-        yaxis_title="Portfolio Value",
-        xaxis_title="Date",
+        margin=dict(
+            l=20,
+            r=20,
+            t=45,
+            b=20,
+        ),
+        paper_bgcolor=theme["background"],
+        plot_bgcolor=theme["surface"],
+        font=dict(
+            color=theme["text"],
+            size=12,
+        ),
         hovermode="x unified",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)"
+        dragmode="pan",
+        xaxis=dict(
+            title="Date",
+            showgrid=True,
+            gridcolor=theme["border"],
+            zeroline=False,
+            showline=True,
+            linecolor=theme["border"],
+        ),
+        yaxis=dict(
+            title="Portfolio Value ($)",
+            tickprefix="$",
+            separatethousands=True,
+            showgrid=True,
+            gridcolor=theme["border"],
+            zeroline=False,
+            showline=True,
+            linecolor=theme["border"],
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0,
+        ),
+        uirevision="strategy-comparison-chart",
     )
-
 
     st.plotly_chart(
         strategy_fig,
-        width="stretch"
+        width="stretch",
+        config={
+            "scrollZoom": True,
+            "displayModeBar": True,
+            "displaylogo": False,
+        },
     )
-
 
 except Exception as error:
 
@@ -1734,6 +1992,491 @@ except Exception as error:
         "6mo, 1y or 2y."
     )
 
+# ============================================================
+# LATEST AI PREDICTION SUMMARY
+# ============================================================
+
+st.markdown("---")
+
+st.markdown(
+    '<div class="section-title">🤖 Latest AI Prediction</div>',
+    unsafe_allow_html=True
+)
+
+st.caption(
+    "The latest recorded paper prediction from the forward-testing log."
+)
+
+from pathlib import Path
+
+PREDICTION_LOG_FILE = (
+    Path(__file__).resolve().parent / "forward_predictions.csv"
+)
+
+if not PREDICTION_LOG_FILE.exists():
+
+    st.info(
+        "No prediction history found. Run "
+        "`python -m src.forward_test` to generate a paper prediction."
+    )
+
+else:
+
+    try:
+        prediction_log = pd.read_csv(PREDICTION_LOG_FILE)
+
+        if prediction_log.empty:
+            st.info("No predictions have been recorded yet.")
+
+        else:
+            latest = prediction_log.iloc[-1]
+
+            signal = str(latest.get("Signal", "N/A")).upper()
+
+            up_probability = pd.to_numeric(
+                latest.get("Up_Probability"),
+                errors="coerce"
+            )
+
+            down_probability = pd.to_numeric(
+                latest.get("Down_Probability"),
+                errors="coerce"
+            )
+
+            signal_date = latest.get("Signal_Date", "N/A")
+            outcome_date = latest.get("Outcome_Date", "")
+            actual = pd.to_numeric(
+                latest.get("Actual"),
+                errors="coerce"
+            )
+            correct = pd.to_numeric(
+                latest.get("Correct"),
+                errors="coerce"
+            )
+
+            status = (
+                "Completed"
+                if pd.notna(actual) and pd.notna(correct)
+                else "Pending"
+            )
+
+            col1, col2, col3 = st.columns(3)
+
+            col1.metric(
+                "Latest Signal",
+                signal
+            )
+
+            col2.metric(
+                "UP Probability",
+                f"{up_probability:.2f}%"
+                if pd.notna(up_probability)
+                else "N/A"
+            )
+
+            col3.metric(
+                "DOWN Probability",
+                f"{down_probability:.2f}%"
+                if pd.notna(down_probability)
+                else "N/A"
+            )
+
+            col4, col5, col6 = st.columns(3)
+
+            col4.metric(
+                "Signal Date",
+                str(signal_date)
+            )
+
+            col5.metric(
+                "Prediction Status",
+                status
+            )
+
+            if pd.notna(actual):
+                actual_label = "UP" if actual == 1 else "DOWN"
+            else:
+                actual_label = "Awaiting outcome"
+
+            col6.metric(
+                "Actual Outcome",
+                actual_label
+            )
+
+            if status == "Completed":
+                result_label = (
+                    "Correct"
+                    if correct == 1
+                    else "Incorrect"
+                )
+
+                st.info(
+                    f"Prediction result: **{result_label}**. "
+                    f"Signal date: {signal_date}. "
+                    f"Outcome date: {outcome_date or 'Not recorded'}."
+                )
+            else:
+                st.info(
+                    "This prediction is still pending. "
+                    "Its result will be shown after the outcome is recorded."
+                )
+
+            st.caption(
+                "These probabilities are model estimates, not guarantees. "
+                "This dashboard is for educational paper-testing only."
+            )
+
+    except (OSError, ValueError, pd.errors.ParserError) as error:
+        st.error(
+            f"Could not load the latest AI prediction: {error}"
+        )
+
+# ============================================================
+# FORWARD-TEST PERFORMANCE
+# ============================================================
+
+st.markdown("---")
+
+st.markdown(
+    '<div class="section-title">🧪 Forward-Test Performance</div>',
+    unsafe_allow_html=True
+)
+
+st.caption(
+    "Tracks recorded AI predictions against subsequent market outcomes. "
+    "Only completed predictions are used to calculate performance."
+)
+
+from pathlib import Path
+
+FORWARD_LOG_FILE = Path(__file__).resolve().parent / "forward_predictions.csv"
+
+if not FORWARD_LOG_FILE.exists():
+
+    st.info(
+        "No forward-testing log exists yet. "
+        "Run `python -m src.forward_test` to create one."
+    )
+
+else:
+
+    try:
+        forward_log = pd.read_csv(FORWARD_LOG_FILE)
+
+        required_columns = [
+            "Symbol",
+            "Signal_Date",
+            "Outcome_Date",
+            "Signal",
+            "Up_Probability",
+            "Down_Probability",
+            "Confidence",
+            "Actual",
+            "Correct",
+        ]
+
+        for column in required_columns:
+            if column not in forward_log.columns:
+                forward_log[column] = pd.NA
+
+        forward_log = forward_log[required_columns].copy()
+
+        forward_log["Actual"] = pd.to_numeric(
+            forward_log["Actual"],
+            errors="coerce"
+        )
+
+        forward_log["Correct"] = pd.to_numeric(
+            forward_log["Correct"],
+            errors="coerce"
+        )
+
+        forward_log["Up_Probability"] = pd.to_numeric(
+            forward_log["Up_Probability"],
+            errors="coerce"
+        )
+
+        forward_log["Down_Probability"] = pd.to_numeric(
+            forward_log["Down_Probability"],
+            errors="coerce"
+        )
+
+        forward_log["Confidence"] = pd.to_numeric(
+            forward_log["Confidence"],
+            errors="coerce"
+        )
+
+        completed = forward_log.dropna(
+            subset=["Actual", "Correct"]
+        ).copy()
+
+        pending_count = len(forward_log) - len(completed)
+        total_count = len(forward_log)
+
+        correct_count = int(
+            (completed["Correct"] == 1).sum()
+        )
+
+        accuracy = (
+            correct_count / len(completed) * 100
+            if not completed.empty
+            else None
+        )
+
+        metric1, metric2, metric3, metric4 = st.columns(4)
+
+        metric1.metric(
+            "Total Predictions",
+            total_count
+        )
+
+        metric2.metric(
+            "Completed Outcomes",
+            len(completed)
+        )
+
+        metric3.metric(
+            "Pending Outcomes",
+            pending_count
+        )
+
+        metric4.metric(
+            "Accuracy",
+            f"{accuracy:.2f}%"
+            if accuracy is not None
+            else "N/A"
+        )
+
+        if completed.empty:
+
+            st.info(
+                "There are no completed outcomes yet. "
+                "Accuracy will appear after a prediction is evaluated."
+            )
+
+        else:
+
+            st.markdown("### Completed Prediction Results")
+
+            display_completed = completed.copy()
+
+            display_completed["Actual"] = (
+                display_completed["Actual"]
+                .map({
+                    1: "UP",
+                    0: "DOWN"
+                })
+                .fillna("Unknown")
+            )
+
+            display_completed["Correct"] = (
+                display_completed["Correct"]
+                .map({
+                    1: "Correct",
+                    0: "Incorrect"
+                })
+                .fillna("Unknown")
+            )
+
+            st.dataframe(
+                display_completed[
+                    [
+                        "Symbol",
+                        "Signal_Date",
+                        "Outcome_Date",
+                        "Signal",
+                        "Up_Probability",
+                        "Down_Probability",
+                        "Actual",
+                        "Correct",
+                    ]
+                ],
+                width="stretch",
+                hide_index=True
+            )
+
+        st.markdown("### Prediction History")
+
+        display_log = forward_log.copy()
+
+        display_log["Actual"] = (
+            display_log["Actual"]
+            .map({
+                1: "UP",
+                0: "DOWN"
+            })
+            .fillna("Pending")
+        )
+
+        display_log["Correct"] = (
+            display_log["Correct"]
+            .map({
+                1: "Correct",
+                0: "Incorrect"
+            })
+            .fillna("Pending")
+        )
+
+        st.dataframe(
+            display_log,
+            width="stretch",
+            hide_index=True
+        )
+
+        st.caption(
+            "Accuracy is descriptive, not proof of predictive skill. "
+            "Small samples can produce misleading results."
+        )
+
+    except (OSError, ValueError, pd.errors.ParserError) as error:
+
+        st.error(
+            f"Could not read the forward-testing log: {error}"
+        )
+
+# ============================================================
+# FORWARD-TEST ACCURACY CHART
+# ============================================================
+
+st.markdown("### 📈 Cumulative Forward-Test Accuracy")
+
+if FORWARD_LOG_FILE.exists():
+
+    try:
+        chart_data = pd.read_csv(FORWARD_LOG_FILE)
+
+        chart_data["Correct"] = pd.to_numeric(
+            chart_data["Correct"],
+            errors="coerce"
+        )
+
+        chart_data = chart_data.dropna(
+            subset=["Correct", "Signal_Date"]
+        ).copy()
+
+        if not chart_data.empty:
+
+            chart_data["Signal_Date"] = pd.to_datetime(
+                chart_data["Signal_Date"],
+                errors="coerce"
+            )
+
+            chart_data = chart_data.dropna(
+                subset=["Signal_Date"]
+            )
+
+            chart_data = chart_data.sort_values("Signal_Date")
+
+            chart_data["Cumulative_Correct"] = (
+                chart_data["Correct"].eq(1).cumsum()
+            )
+
+            chart_data["Completed_Count"] = (
+                chart_data["Correct"].notna().cumsum()
+            )
+
+            chart_data["Cumulative_Accuracy"] = (
+                chart_data["Cumulative_Correct"]
+                / chart_data["Completed_Count"]
+                * 100
+            )
+
+            fig_forward = go.Figure()
+
+            # Cumulative AI prediction accuracy.
+            fig_forward.add_trace(
+                go.Scatter(
+                    x=chart_data["Signal_Date"],
+                    y=chart_data["Cumulative_Accuracy"],
+                    mode="lines+markers",
+                    name="Cumulative Accuracy",
+                    line=dict(
+                        color=theme["accent"],
+                        width=2.5,
+                    ),
+                    marker=dict(size=10,
+    line=dict(color=theme["text"], width=1.5),
+),
+                        
+                    ),
+                    hovertemplate=(
+                        "<b>Prediction Date:</b> %{x|%d %b %Y}<br>"
+                        "<b>Cumulative Accuracy:</b> %{y:.2f}%"
+                        "<extra></extra>"
+                    ),
+                )
+            
+
+            # Theme-aware chart layout.
+            fig_forward.update_layout(
+                title=dict(
+                    text="AI Forward-Test Accuracy Over Time",
+                    font=dict(
+                        color=theme["text"],
+                        size=18,
+                    ),
+                ),
+                height=420,
+                margin=dict(
+                    l=20,
+                    r=20,
+                    t=60,
+                    b=20,
+                ),
+                paper_bgcolor=theme["background"],
+                plot_bgcolor=theme["surface"],
+                font=dict(
+                    color=theme["text"],
+                    size=12,
+                ),
+                hovermode="x unified",
+                dragmode="pan",
+                xaxis=dict(
+                    title="Prediction Date",
+                    showgrid=True,
+                    gridcolor=theme["border"],
+                    zeroline=False,
+                    showline=True,
+                    linecolor=theme["border"],
+                ),
+                yaxis=dict(
+                    title="Cumulative Accuracy (%)",
+                    range=[-5, 100],
+                    ticksuffix="%",
+                    showgrid=True,
+                    gridcolor=theme["border"],
+                    zeroline=False,
+                    showline=True,
+                    linecolor=theme["border"],
+                ),
+                showlegend=False,
+                uirevision="forward-test-accuracy-chart",
+            )
+
+            st.plotly_chart(
+                fig_forward,
+                width="stretch",
+                config={
+                    "scrollZoom": True,
+                    "displayModeBar": True,
+                    "displaylogo": False,
+                },
+            )
+
+            st.caption(
+                "This chart updates as predictions are evaluated. "
+                "A small number of results is not enough to establish "
+                "reliable predictive performance."
+            )
+
+        else:
+            st.info(
+                "The accuracy chart will appear after at least one "
+                "prediction has a recorded outcome."
+            )
+
+    except (OSError, ValueError, pd.errors.ParserError) as error:
+        st.error(f"Could not create the accuracy chart: {error}")
 
 # ============================================================
 # FOOTER
