@@ -2335,44 +2335,43 @@ else:
         )
 
 # ============================================================
+# ============================================================
 # FORWARD-TEST ACCURACY CHART
 # ============================================================
 
 st.markdown("### 📈 Cumulative Forward-Test Accuracy")
 
 if FORWARD_LOG_FILE.exists():
-
     try:
         chart_data = pd.read_csv(FORWARD_LOG_FILE)
 
         chart_data["Correct"] = pd.to_numeric(
             chart_data["Correct"],
-            errors="coerce"
+            errors="coerce",
         )
 
+        chart_data["Signal_Date"] = pd.to_datetime(
+            chart_data["Signal_Date"],
+            errors="coerce",
+        )
+
+        # Exclude pending predictions and rows with invalid dates.
         chart_data = chart_data.dropna(
-            subset=["Correct", "Signal_Date"]
+            subset=["Correct", "Signal_Date"],
         ).copy()
 
-        if not chart_data.empty:
-
-            chart_data["Signal_Date"] = pd.to_datetime(
-                chart_data["Signal_Date"],
-                errors="coerce"
-            )
-
-            chart_data = chart_data.dropna(
-                subset=["Signal_Date"]
-            )
-
+        if chart_data.empty:
+            st.info("No completed predictions are available to chart.")
+        else:
             chart_data = chart_data.sort_values("Signal_Date")
 
             chart_data["Cumulative_Correct"] = (
                 chart_data["Correct"].eq(1).cumsum()
             )
 
-            chart_data["Completed_Count"] = (
-                chart_data["Correct"].notna().cumsum()
+            chart_data["Completed_Count"] = range(
+                1,
+                len(chart_data) + 1,
             )
 
             chart_data["Cumulative_Accuracy"] = (
@@ -2381,23 +2380,46 @@ if FORWARD_LOG_FILE.exists():
                 * 100
             )
 
+            latest_accuracy = chart_data["Cumulative_Accuracy"].iloc[-1]
+
+            metric_col1, metric_col2 = st.columns(2)
+
+            with metric_col1:
+                st.metric(
+                    "Completed Predictions",
+                    len(chart_data),
+                )
+
+            with metric_col2:
+                st.metric(
+                    "Cumulative Accuracy",
+                    f"{latest_accuracy:.2f}%",
+                )
+
             fig_forward = go.Figure()
 
-            # Cumulative AI prediction accuracy.
             fig_forward.add_trace(
                 go.Scatter(
                     x=chart_data["Signal_Date"],
                     y=chart_data["Cumulative_Accuracy"],
-                    mode="lines+markers",
+                    mode="lines+markers+text",
                     name="Cumulative Accuracy",
+                    text=[
+                        f"{value:.2f}%"
+                        for value in chart_data["Cumulative_Accuracy"]
+                    ],
+                    textposition="top center",
                     line=dict(
                         color=theme["accent"],
                         width=2.5,
                     ),
-                    marker=dict(size=10,
-    line=dict(color=theme["text"], width=1.5),
-),
-                        
+                    marker=dict(
+                        size=12,
+                        color=theme["accent"],
+                        line=dict(
+                            color=theme["text"],
+                            width=1.5,
+                        ),
                     ),
                     hovertemplate=(
                         "<b>Prediction Date:</b> %{x|%d %b %Y}<br>"
@@ -2405,9 +2427,8 @@ if FORWARD_LOG_FILE.exists():
                         "<extra></extra>"
                     ),
                 )
-            
+            )
 
-            # Theme-aware chart layout.
             fig_forward.update_layout(
                 title=dict(
                     text="AI Forward-Test Accuracy Over Time",
@@ -2418,10 +2439,10 @@ if FORWARD_LOG_FILE.exists():
                 ),
                 height=420,
                 margin=dict(
-                    l=20,
-                    r=20,
-                    t=60,
-                    b=20,
+                    l=30,
+                    r=25,
+                    t=65,
+                    b=45,
                 ),
                 paper_bgcolor=theme["background"],
                 plot_bgcolor=theme["surface"],
@@ -2453,32 +2474,23 @@ if FORWARD_LOG_FILE.exists():
                 uirevision="forward-test-accuracy-chart",
             )
 
-            st.plotly_chart(
-                fig_forward,
-                width="stretch",
-                config={
-                    "scrollZoom": True,
-                    "displayModeBar": True,
-                    "displaylogo": False,
-                },
+            st.components.v1.html(
+                fig_forward.to_html(
+                    full_html=False,
+                    include_plotlyjs="cdn",
+                    config={
+                        "scrollZoom": True,
+                        "displayModeBar": True,
+                        "displaylogo": False,
+                    },
+                ),
+                height=480,
+                scrolling=False,
             )
 
-            st.caption(
-                "This chart updates as predictions are evaluated. "
-                "A small number of results is not enough to establish "
-                "reliable predictive performance."
-            )
+    except (OSError, ValueError, KeyError, pd.errors.ParserError) as error:
+        st.error(f"Could not build the forward-test accuracy chart: {error}")
 
-        else:
-            st.info(
-                "The accuracy chart will appear after at least one "
-                "prediction has a recorded outcome."
-            )
-
-    except (OSError, ValueError, pd.errors.ParserError) as error:
-        st.error(f"Could not create the accuracy chart: {error}")
-
-# ============================================================
 # FOOTER
 # ============================================================
 
